@@ -21,16 +21,16 @@ export async function generateMetadata(): Promise<Metadata> {
   const protocol = requestHeaders.get("x-forwarded-proto") ?? (host.includes("localhost") ? "http" : "https");
   const origin = `${protocol}://${host}`;
   return {
-    title: "一雀日麻｜四人线上东风战",
-    description: "无需登录，建立房间并分享链接，四位朋友直接开始日麻东风战。",
+    title: "谐不压怔！一日麻！",
+    description: "杨振山快来，就等你来玩了！无需登录，四位朋友直接开始日麻东风战。",
     icons: { icon: "/favicon.svg", shortcut: "/favicon.svg" },
     openGraph: {
-      title: "一雀日麻｜四人线上东风战",
-      description: "四人连线・即开即玩",
+      title: "谐不压怔！一日麻！",
+      description: "杨振山快来，就等你来玩了！",
       type: "website",
-      images: [{ url: `${origin}/og.png`, width: 1000, height: 523, alt: "一雀日麻四人牌桌" }],
+      images: [{ url: `${origin}/og.png`, width: 1000, height: 523, alt: "谐不压怔！一日麻！四人牌桌" }],
     },
-    twitter: { card: "summary_large_image", title: "一雀日麻", description: "四人连线・即开即玩", images: [`${origin}/og.png`] },
+    twitter: { card: "summary_large_image", title: "谐不压怔！一日麻！", description: "杨振山快来，就等你来玩了！", images: [`${origin}/og.png`] },
   };
 }
 

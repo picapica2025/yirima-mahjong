@@ -60,7 +60,10 @@ button { cursor: pointer; }
 }
 .hero h1 { font: 900 clamp(48px, 6vw, 78px)/1.05 var(--font-serif), serif; letter-spacing: -.04em; margin: 17px 0 22px; }
 .hero h1 em { color: var(--red); font-style: normal; }
-.hero-copy > p { max-width: 510px; color: #626861; font-size: 16px; line-height: 1.9; margin: 0 0 28px; }
+.hero-copy > p { max-width: 510px; color: #626861; font-size: 16px; line-height: 1.9; margin: 0; }
+.hero-copy .invite-subtitle { color: var(--red-dark); font: 800 clamp(17px, 2vw, 22px)/1.55 var(--font-serif),serif; letter-spacing: .03em; margin-bottom: 9px; }
+.hero-copy .hero-description { margin-bottom: 28px; }
+.invite-line { color: var(--red-dark); font: 800 14px/1.6 var(--font-serif),serif; margin: -10px 0 18px; }
 .create-card { background: rgba(255,255,255,.62); border: 1px solid var(--line); border-radius: 16px; padding: 16px; box-shadow: 0 15px 35px rgba(64,43,24,.08); }
 .create-card label, .join-form label { display: block; color: var(--muted); font-size: 10px; font-weight: 700; margin: 0 0 8px 3px; }
 .create-card > div, .join-form > div { display: flex; gap: 8px; }
@@ -216,6 +219,8 @@ button:disabled { cursor: not-allowed; opacity: .48; box-shadow: none !important
 .score-board i { width: 20px; height: 20px; display: flex; align-items: center; justify-content: center; border-radius: 50%; background: #eadcc5; font-size: 8px; font-style: normal; }
 .score-board b { color: var(--red-dark); }
 .result-card > .primary-button { width: 100%; margin-top: 6px; }
+.result-actions { display: grid; gap: 8px; margin-top: 6px; }
+.result-actions .primary-button, .result-actions .quiet-button { width: 100%; }
 
 @media (max-width: 850px) {
   .hero { grid-template-columns: 1fr; padding-top: 50px; }
@@ -230,7 +235,7 @@ button:disabled { cursor: not-allowed; opacity: .48; box-shadow: none !important
 
 @media (max-width: 560px) {
   .landing-nav, .topbar { min-height: 66px; padding: 9px 13px; }
-  .brand-seal { width: 37px; height: 37px; font-size: 18px; } .brand strong { font-size: 16px; } .brand small { display: none; }
+  .brand-seal { width: 37px; height: 37px; font-size: 18px; } .brand strong { font-size: 13px; letter-spacing: .04em; } .brand small { display: none; }
   .no-login-badge { font-size: 8px; padding: 6px 8px; }
   .hero { min-height: auto; padding: 42px 16px 36px; gap: 45px; } .hero h1 { font-size: 49px; } .hero-copy > p { font-size: 14px; }
   .create-card > div, .join-form > div { flex-direction: column; } .create-card button, .join-form button { height: 46px; }

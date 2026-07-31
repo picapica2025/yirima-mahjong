@@ -77,6 +77,7 @@ export type ClientAction =
   | { type: "tsumo" }
   | { type: "ankan"; tileType: number }
   | { type: "next-round" }
+  | { type: "rematch" }
   | { type: "tick" };
 
 export class GameError extends Error {
@@ -682,6 +683,14 @@ export function applyAction(state: RoomState, token: string, action: ClientActio
       return state;
     }
     return startRound(state, nextRound, nextDealer, nextHonba, game.riichiSticks);
+  }
+  if (action.type === "rematch") {
+    if (state.status !== "game-end" || game.phase !== "game-end") throw new GameError("东风战尚未结束");
+    if (player.seat !== state.hostSeat) throw new GameError("只有房主可以原房再开一场");
+    state.players.forEach((candidate) => {
+      candidate.score = 25000;
+    });
+    return startRound(state, 0, 0, 0, 0);
   }
   if (game.phase === "claim") {
     const options = game.claimOptions[String(player.seat)] ?? [];

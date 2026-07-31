@@ -7,10 +7,11 @@ test("defines the public riichi landing experience", async () => {
     readFile(new URL("../app/page.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/layout.tsx", import.meta.url), "utf8"),
   ]);
-  assert.match(layout, /一雀日麻｜四人线上东风战/);
-  assert.match(page, /朋友到齐/);
+  assert.match(layout, /谐不压怔！一日麻！/);
+  assert.match(page, /杨振山快来，就等你来玩了！/);
   assert.match(page, /免登录/);
   assert.match(page, /建立四人房/);
+  assert.match(page, /原房再开一场/);
   assert.doesNotMatch(`${page}\n${layout}`, /codex-preview|Your site is taking shape|react-loading-skeleton/i);
 });
 

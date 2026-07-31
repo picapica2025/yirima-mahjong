@@ -234,7 +234,7 @@ export default function Home() {
   async function shareRoom() {
     const url = `${window.location.origin}${window.location.pathname}?room=${roomCode}`;
     try {
-      if (navigator.share) await navigator.share({ title: "一雀日麻・四人房", text: `房号 ${roomCode}，点击加入四人日麻`, url });
+      if (navigator.share) await navigator.share({ title: "谐不压怔！一日麻！", text: `杨振山快来，就等你来玩了！房号 ${roomCode}`, url });
       else await navigator.clipboard.writeText(url);
       setCopied(true);
       window.setTimeout(() => setCopied(false), 1800);
@@ -263,8 +263,9 @@ export default function Home() {
         <section className="hero">
           <div className="hero-copy">
             <span className="eyebrow">四人线上日麻</span>
-            <h1>朋友到齐，<br /><em>马上开桌。</em></h1>
-            <p>建立一间私人房，分享链接。四个人用昵称入座，不注册、不安装，直接打东风战。</p>
+            <h1>谐不压怔！<br /><em>一日麻！</em></h1>
+            <p className="invite-subtitle">杨振山快来，就等你来玩了！</p>
+            <p className="hero-description">建立一间私人房，分享链接。四个人用昵称入座，不注册、不安装，直接打东风战。</p>
             <div className="create-card">
               <label htmlFor="host-name">你的昵称</label>
               <div><input id="host-name" value={name} onChange={(event) => setName(event.target.value)} maxLength={16} placeholder="例如：小林" onKeyDown={(event) => { if (event.key === "Enter") void createRoom(); }} /><button onClick={createRoom} disabled={busy}>{busy ? "建房中…" : "建立四人房"}</button></div>
@@ -293,7 +294,8 @@ export default function Home() {
         <header className="topbar"><Brand /><span className="no-login-badge">免登录</span></header>
         <section className="join-panel">
           <span className="eyebrow">朋友邀请你加入</span>
-          <h1>四人日麻房</h1>
+          <h1>谐不压怔！一日麻！</h1>
+          <p className="invite-line">杨振山快来，就等你来玩了！</p>
           <button className="room-code" onClick={shareRoom}><small>房号</small>{room.code}<i>{copied ? "已复制" : "复制链接"}</i></button>
           <SeatList room={room} />
           {room.status === "lobby" ? (
@@ -368,12 +370,12 @@ export default function Home() {
       <footer className="game-notes"><p><span>东风战</span>立直・赤宝牌・食断・多人荣和・荒牌听牌料</p><p>公开链接入场・无需账号・不涉及金钱</p></footer>
 
       {(room.status === "round-end" || room.status === "game-end") && result && (
-        <div className="result-overlay"><section className="result-card"><span className="result-stamp">{result.kind === "draw" ? "流" : "和"}</span><small>东{game.round + 1}局・{result.title}</small><h1>{result.message}</h1>{result.winners.map((winner) => <div className="winner-detail" key={winner.seat}><strong>{room.players[winner.seat].name}　{winner.han}番 {winner.fu}符</strong><span>＋{winner.points.toLocaleString()} 点</span><p>{winner.yaku.join("・")}</p></div>)}<div className="score-board">{[...room.players].sort((a, b) => b.score - a.score).map((player, index) => <span key={player.seat}><i>{index + 1}</i>{player.name}<b>{player.score.toLocaleString()}</b></span>)}</div>{room.status === "round-end" && <button className="primary-button" disabled={viewer.seat !== room.hostSeat || busy} onClick={() => sendAction({ type: "next-round" })}>{viewer.seat === room.hostSeat ? "下一局" : "等待房主继续"}</button>}{room.status === "game-end" && <a className="primary-button" href={window.location.pathname}>建立新房</a>}</section></div>
+        <div className="result-overlay"><section className="result-card"><span className="result-stamp">{result.kind === "draw" ? "流" : "和"}</span><small>东{game.round + 1}局・{result.title}</small><h1>{result.message}</h1>{result.winners.map((winner) => <div className="winner-detail" key={winner.seat}><strong>{room.players[winner.seat].name}　{winner.han}番 {winner.fu}符</strong><span>＋{winner.points.toLocaleString()} 点</span><p>{winner.yaku.join("・")}</p></div>)}<div className="score-board">{[...room.players].sort((a, b) => b.score - a.score).map((player, index) => <span key={player.seat}><i>{index + 1}</i>{player.name}<b>{player.score.toLocaleString()}</b></span>)}</div>{room.status === "round-end" && <button className="primary-button" disabled={viewer.seat !== room.hostSeat || busy} onClick={() => sendAction({ type: "next-round" })}>{viewer.seat === room.hostSeat ? "下一局" : "等待房主继续"}</button>}{room.status === "game-end" && <div className="result-actions"><button className="primary-button" disabled={viewer.seat !== room.hostSeat || busy} onClick={() => sendAction({ type: "rematch" })}>{viewer.seat === room.hostSeat ? "原房再开一场" : "等待房主再开"}</button><a className="quiet-button" href={window.location.pathname}>建立新房</a></div>}</section></div>
       )}
     </main>
   );
 }
 
 function Brand() {
-  return <a className="brand" href="/"><span className="brand-seal">雀</span><span><strong>一雀日麻</strong><small>YIQUE RIICHI</small></span></a>;
+  return <a className="brand" href="/"><span className="brand-seal">雀</span><span><strong>谐不压怔！一日麻！</strong><small>杨振山快来，就等你来玩了！</small></span></a>;
 }
