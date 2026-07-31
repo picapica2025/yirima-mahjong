@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { headers } from "next/headers";
 import { Noto_Sans_TC, Noto_Serif_TC } from "next/font/google";
 import "./globals.css";
 
@@ -14,24 +15,25 @@ const serif = Noto_Serif_TC({
   weight: ["600", "700", "900"],
 });
 
-export const metadata: Metadata = {
-  title: "一雀麻將｜與三位電腦玩家開桌",
-  description:
-    "即開即玩的四人麻將牌桌。支援摸打、吃、碰、明槓與胡牌，手機與桌面都能玩。",
-  icons: {
-    icon: "/favicon.svg",
-    shortcut: "/favicon.svg",
-  },
-};
+export async function generateMetadata(): Promise<Metadata> {
+  const requestHeaders = await headers();
+  const host = requestHeaders.get("x-forwarded-host") ?? requestHeaders.get("host") ?? "yique-mahjong-2026.ghwsocio918.chatgpt.site";
+  const protocol = requestHeaders.get("x-forwarded-proto") ?? (host.includes("localhost") ? "http" : "https");
+  const origin = `${protocol}://${host}`;
+  return {
+    title: "一雀日麻｜四人线上东风战",
+    description: "无需登录，建立房间并分享链接，四位朋友直接开始日麻东风战。",
+    icons: { icon: "/favicon.svg", shortcut: "/favicon.svg" },
+    openGraph: {
+      title: "一雀日麻｜四人线上东风战",
+      description: "四人连线・即开即玩",
+      type: "website",
+      images: [{ url: `${origin}/og.png`, width: 1000, height: 523, alt: "一雀日麻四人牌桌" }],
+    },
+    twitter: { card: "summary_large_image", title: "一雀日麻", description: "四人连线・即开即玩", images: [`${origin}/og.png`] },
+  };
+}
 
-export default function RootLayout({
-  children,
-}: Readonly<{
-  children: React.ReactNode;
-}>) {
-  return (
-    <html lang="zh-Hant">
-      <body className={`${sans.variable} ${serif.variable}`}>{children}</body>
-    </html>
-  );
+export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
+  return <html lang="zh-Hans"><body className={`${sans.variable} ${serif.variable}`}>{children}</body></html>;
 }
