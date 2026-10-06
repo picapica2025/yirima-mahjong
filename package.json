@@ -1,5 +1,5 @@
 {
-  "name": "site-creator-vinext-starter",
+  "name": "yiri-mahjong",
   "version": "0.1.0",
   "private": true,
   "engines": {
@@ -7,11 +7,16 @@
   },
   "scripts": {
     "dev": "vinext dev",
-    "build": "vinext build",
+    "build": "npm run build:portable && node scripts/package-release.mjs && vinext build",
     "start": "vinext start",
     "test": "npm run build && node --test tests/rendered-html.test.mjs",
     "lint": "eslint . --ignore-pattern dist --ignore-pattern .next",
-    "db:generate": "drizzle-kit generate"
+    "db:generate": "drizzle-kit generate",
+    "build:portable": "node scripts/build-portable.mjs",
+    "start:portable": "node release/portable/server.mjs",
+    "start:lan": "node release/portable/server.mjs --lan",
+    "test:portable": "node --test tests/portable.test.mjs",
+    "release": "npm run build:portable && npm run test:portable && node scripts/package-release.mjs"
   },
   "dependencies": {
     "drizzle-orm": "0.45.2",
@@ -38,5 +43,7 @@
     "vite": "8.0.13",
     "wrangler": "4.92.0"
   },
-  "type": "module"
+  "type": "module",
+  "description": "Fin 的四人连线日麻作品",
+  "author": "Fin"
 }
