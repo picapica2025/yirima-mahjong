@@ -1,98 +1,62 @@
-# vinext-starter
+# 谐不压怔！一日麻！
 
-A clean full-stack starter running on
-[vinext](https://github.com/cloudflare/vinext), with optional Cloudflare D1 and
-Drizzle support.
+杨振山快来，就等你来玩了！
 
-## Prerequisites
+一个免登录的四人日麻网页项目。房主建立房间并分享链接，四位朋友用昵称入座后即可开始东风战。
 
-- Node.js `>=22.13.0`
+[进入现有在线牌桌](https://yique-mahjong-2026.ghwsocio918.chatgpt.site)
 
-## Quick Start
+## 已有功能
 
-```bash
-npm install
+- 免注册、免登录，通过房间链接邀请朋友。
+- 四人入座、房主开局、房间状态同步和刷新后恢复自己的座位。
+- 东风战、25,000 点、立直、吃碰杠、荣和、自摸和荒牌流局等核心日麻玩法。
+- 局末计分、下一局，以及原房再开一场。
+- 服务器保存牌局；客户端只能看到自己的暗牌。
+
+这是朋友间娱乐用的核心规则实现，不涉及金钱；尚未作为完整赛事规则实现验收。
+
+## GitHub 发布与在线托管
+
+本仓库保存完整前端、房间 API、规则逻辑和数据库结构。
+
+现有在线牌桌由 Sites 托管，使用 Cloudflare Workers 和 D1 数据库。GitHub Pages 提供静态托管，不能独立运行本项目的房间 API 和联机数据库。上传源码不会自动把联机服务迁移到 GitHub。
+
+当前试玩地址在中国大陆的可访问性仍需实际线路验证。仓库公开与域名绑定本身都不能保证大陆访问。
+
+## 本地开发
+
+需要 Node.js `>=22.13.0`。
+
+```sh
+npm ci
 npm run dev
+```
+
+打开开发服务显示的本地地址。开发配置会模拟 `DB` 数据库绑定；首次房间请求会创建所需的数据表。本地运行数据保存在被 Git 忽略的 `.wrangler/` 目录中。
+
+```sh
 npm run build
+npm run lint
+npm test
 ```
 
-This starter does not use `wrangler.jsonc`.
+`npm test` 包含构建与基础源码断言，不代表所有日麻规则都已覆盖。
 
-## Included Shape
+## 主要文件
 
-- edit site code under `app/`
-- `.openai/hosting.json` declares optional Sites D1 and R2 bindings
-- `vite.config.ts` simulates declared bindings for local development
-- `db/schema.ts` starts intentionally empty
-- `examples/d1/` contains an optional D1 example surface
-- `drizzle.config.ts` supports local migration generation when needed
+| 路径 | 用途 |
+| --- | --- |
+| `app/page.tsx` | 大厅、入座、牌桌和结果界面 |
+| `app/api/rooms/` | 创建房间、读取状态与牌局操作 |
+| `lib/riichi.ts` | 牌局状态、日麻规则与公开视图 |
+| `lib/rooms.ts` | D1 房间存储与并发更新 |
+| `db/schema.ts`、`drizzle/` | 数据库结构和迁移 |
+| `worker/index.ts`、`vite.config.ts` | Worker 入口及本地构建配置 |
+| `.openai/hosting.json` | 现有 Sites 项目和逻辑数据库绑定 |
 
-## Workspace Auth Headers
+## 部署到其他环境
 
-OpenAI workspace sites can read the current user's email from
-`oai-authenticated-user-email`.
+需要支持服务器请求和持久数据库的托管环境。当前代码直接使用 `cloudflare:workers` 的 `DB` 绑定；若使用其他平台，需要适配这一存储层和服务器入口。
 
-SIWC-authenticated workspace sites may also receive
-`oai-authenticated-user-full-name` when the user's SIWC profile has a non-empty
-`name` claim. The full-name value is percent-encoded UTF-8 and is accompanied by
-`oai-authenticated-user-full-name-encoding: percent-encoded-utf-8`.
-
-Treat the full name as optional and fall back to email when it is absent:
-
-```tsx
-import { headers } from "next/headers";
-
-export default async function Home() {
-  const requestHeaders = await headers();
-  const email = requestHeaders.get("oai-authenticated-user-email");
-  const encodedFullName = requestHeaders.get("oai-authenticated-user-full-name");
-  const fullName =
-    encodedFullName &&
-    requestHeaders.get("oai-authenticated-user-full-name-encoding") ===
-      "percent-encoded-utf-8"
-      ? decodeURIComponent(encodedFullName)
-      : null;
-
-  const displayName = fullName ?? email;
-  // ...
-}
-```
-
-## Optional Dispatch-Owned ChatGPT Sign-In
-
-Import the ready-to-use helpers from `app/chatgpt-auth.ts` when the site needs
-optional or required ChatGPT sign-in:
-
-- Use `getChatGPTUser()` for optional signed-in UI.
-- Use `requireChatGPTUser(returnTo)` for server-rendered pages that should send
-  anonymous visitors through Sign in with ChatGPT.
-- Use `chatGPTSignInPath(returnTo)` and `chatGPTSignOutPath(returnTo)` for
-  browser links or actions.
-- Pass a same-origin relative `returnTo` path for the destination after sign-in
-  or sign-out. The helper validates and safely encodes it.
-- Mark protected pages with `export const dynamic = "force-dynamic"` because
-  they depend on per-request identity headers.
-
-Dispatch owns `/signin-with-chatgpt`, `/signout-with-chatgpt`, `/callback`, the
-OAuth cookies, and identity header injection. Do not implement app routes for
-those reserved paths. Routes that do not import and call the helper remain
-anonymous-compatible.
-
-SIWC establishes identity only; it does not prove workspace membership. Use the
-Sites hosting platform's access policy controls for workspace-wide restrictions,
-or enforce explicit server-side membership or allowlist checks.
-
-Use SIWC for account pages, user-specific dashboards, saved records, and write
-actions tied to the current ChatGPT user. Leave public content anonymous.
-
-## Useful Commands
-
-- `npm run dev`: start local development
-- `npm run build`: verify the vinext build output
-- `npm test`: build the starter and verify its rendered loading skeleton
-- `npm run db:generate`: generate Drizzle migrations after schema changes
-
-## Learn More
-
-- [vinext Documentation](https://github.com/cloudflare/vinext)
-- [Drizzle D1 Guide](https://orm.drizzle.team/docs/get-started/d1-new)
+`.openai/hosting.json` 指向现有 Sites 项目，复制仓库不会自动获得该项目的管理权限。独立部署时应配置自己的项目与数据库。不要把访问令牌、玩家数据或本地数据库提交到仓库。
