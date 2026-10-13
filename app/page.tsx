@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { version as releaseVersion } from "../package.json";
+import { acceptRoomSnapshot, type RoomCursor } from "../lib/room-sync";
 
 type Tile = { id: number; type: number; red?: boolean };
 type Meld = { kind: "chi" | "pon" | "kan"; tiles: Tile[]; from: number; open: boolean };
@@ -145,36 +146,62 @@ export default function Home() {
   const [error, setError] = useState("");
   const [copied, setCopied] = useState(false);
   const [ready, setReady] = useState(false);
+  const [connectionIssue, setConnectionIssue] = useState("");
+  const cursor = useRef<RoomCursor>({ code: "", token: "", revision: -1 });
   const lastTick = useRef(0);
 
   useEffect(() => {
     const code = new URLSearchParams(window.location.search).get("room")?.trim().toUpperCase() ?? "";
+    const savedToken = code ? localStorage.getItem(`yique-riichi:${code}`) ?? "" : "";
+    cursor.current = { code, token: savedToken, revision: -1 };
     setRoomCode(code);
-    setToken(code ? localStorage.getItem(`yique-riichi:${code}`) ?? "" : "");
+    setToken(savedToken);
     setReady(true);
   }, []);
 
-  const fetchRoom = useCallback(async (code: string, currentToken: string, quiet = false) => {
+  const fetchRoom = useCallback(async (code: string, currentToken: string, signal: AbortSignal, quiet = false) => {
+    const isCurrent = () => !signal.aborted && cursor.current.code === code && cursor.current.token === currentToken;
+    const request = new AbortController();
+    const cancel = () => request.abort();
+    signal.addEventListener("abort", cancel, { once: true });
+    const timeout = window.setTimeout(cancel, 10000);
     try {
-      const response = await fetch(`/api/rooms/${code}?token=${encodeURIComponent(currentToken)}`, { cache: "no-store" });
-      const data = await response.json() as { room?: RoomView; error?: string };
+      const response = await fetch(`/api/rooms/${encodeURIComponent(code)}?token=${encodeURIComponent(currentToken)}`, { cache: "no-store", signal: request.signal });
+      const data = await response.json() as { room?: RoomView; error?: string; revision?: number };
+      if (!isCurrent()) return false;
+      if (response.status === 404) {
+        setError(data.error ?? "找不到这个房间");
+        return false;
+      }
       if (!response.ok || !data.room) throw new Error(data.error ?? "读取房间失败");
+      setConnectionIssue("");
+      if (!acceptRoomSnapshot(cursor.current, code, currentToken, data.revision ?? 0)) return true;
       setRoom(data.room);
       if (!quiet) setError("");
       if (data.room.game?.phase === "claim" && data.room.game.claimDeadline && Date.now() >= data.room.game.claimDeadline && currentToken && Date.now() - lastTick.current > 2000) {
         lastTick.current = Date.now();
-        void fetch(`/api/rooms/${code}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ op: "action", token: currentToken, action: { type: "tick" } }) });
+        await fetch(`/api/rooms/${code}`, { method: "POST", signal: request.signal, headers: { "Content-Type": "application/json" }, body: JSON.stringify({ op: "action", token: currentToken, action: { type: "tick" } }) });
       }
-    } catch (fetchError) {
-      if (!quiet) setError(fetchError instanceof Error ? fetchError.message : "读取房间失败");
+    } catch {
+      if (!isCurrent()) return false;
+      setConnectionIssue("连接中断，正在重试；你的座位和已完成的操作会保留。");
+    } finally {
+      window.clearTimeout(timeout);
+      signal.removeEventListener("abort", cancel);
     }
+    return true;
   }, []);
 
   useEffect(() => {
     if (!ready || !roomCode) return;
-    void fetchRoom(roomCode, token);
-    const interval = window.setInterval(() => void fetchRoom(roomCode, token, true), 1100);
-    return () => window.clearInterval(interval);
+    const controller = new AbortController();
+    let timer: number | undefined;
+    const poll = async (quiet = false) => {
+      const keepPolling = await fetchRoom(roomCode, token, controller.signal, quiet);
+      if (keepPolling && !controller.signal.aborted) timer = window.setTimeout(() => void poll(true), 1100);
+    };
+    void poll();
+    return () => { controller.abort(); window.clearTimeout(timer); };
   }, [fetchRoom, ready, roomCode, token]);
 
   async function createRoom() {
@@ -187,6 +214,7 @@ export default function Home() {
       if (!response.ok || !data.token || !data.room) throw new Error(data.error ?? "建立房间失败");
       localStorage.setItem(`yique-riichi:${data.room.code}`, data.token);
       window.history.replaceState({}, "", `${window.location.pathname}?room=${data.room.code}`);
+      cursor.current = { code: data.room.code, token: data.token, revision: 0 };
       setToken(data.token);
       setRoomCode(data.room.code);
       setRoom(data.room);
@@ -203,9 +231,10 @@ export default function Home() {
     setError("");
     try {
       const response = await fetch(`/api/rooms/${roomCode}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ op: "join", name }) });
-      const data = await response.json() as { token?: string; room?: RoomView; error?: string };
+      const data = await response.json() as { token?: string; room?: RoomView; error?: string; revision?: number };
       if (!response.ok || !data.token || !data.room) throw new Error(data.error ?? "加入房间失败");
       localStorage.setItem(`yique-riichi:${roomCode}`, data.token);
+      cursor.current = { code: roomCode, token: data.token, revision: data.revision ?? 0 };
       setToken(data.token);
       setRoom(data.room);
     } catch (joinError) {
@@ -221,9 +250,9 @@ export default function Home() {
     setError("");
     try {
       const response = await fetch(`/api/rooms/${roomCode}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ op: "action", token, action }) });
-      const data = await response.json() as { room?: RoomView; error?: string };
+      const data = await response.json() as { room?: RoomView; error?: string; revision?: number };
       if (!response.ok || !data.room) throw new Error(data.error ?? "操作失败");
-      setRoom(data.room);
+      if (acceptRoomSnapshot(cursor.current, roomCode, token, data.revision ?? 0)) setRoom(data.room);
       setSelectedId(undefined);
     } catch (actionError) {
       setError(actionError instanceof Error ? actionError.message : "操作失败");
@@ -303,7 +332,7 @@ export default function Home() {
   }
 
   if (!room) {
-    return <main className="loading-screen"><span className="brand-seal">雀</span><p>{error || `正在进入房间 ${roomCode}…`}</p></main>;
+    return <main className="loading-screen"><span className="brand-seal">雀</span><p role={error ? "alert" : "status"}>{error || connectionIssue || `正在进入房间 ${roomCode}…`}</p>{(error || connectionIssue) && <div className="recovery-actions"><button className="primary-button" onClick={() => window.location.reload()}>重新连接</button><a className="quiet-button" href={window.location.pathname}>返回首页建房</a></div>}</main>;
   }
 
   if (room.viewerSeat === null) {
@@ -320,6 +349,7 @@ export default function Home() {
             <div className="join-form"><label htmlFor="guest-name">输入昵称后入座</label><div><input id="guest-name" value={name} onChange={(event) => setName(event.target.value)} maxLength={16} placeholder="你的昵称" onKeyDown={(event) => { if (event.key === "Enter") void joinRoom(); }} /><button onClick={joinRoom} disabled={busy || room.players.length >= 4}>{busy ? "加入中…" : "加入牌桌"}</button></div></div>
           ) : <p className="spectator-note">牌局已经开始。这一版不开放中途入座。</p>}
           {error && <p className="form-error">{error}</p>}
+          <ConnectionNotice message={connectionIssue} />
         </section>
       </main>
     );
@@ -335,6 +365,7 @@ export default function Home() {
           <SeatList room={room} />
           <div className="lobby-actions"><p>{room.players.length}/4 人已到齐<br /><small>每人 25,000 点・赤宝牌・食断</small></p><button className="primary-button" onClick={() => sendAction({ type: "start" })} disabled={!isHost || room.players.length !== 4 || busy}>{isHost ? (room.players.length === 4 ? "开始东一局" : "等四人到齐") : "等待房主开始"}</button></div>
           {error && <p className="form-error">{error}</p>}
+          <ConnectionNotice message={connectionIssue} />
         </section>
       </main>
     );
@@ -383,6 +414,7 @@ export default function Home() {
           )}
         </div>
         {error && <p className="table-error">{error}</p>}
+        <ConnectionNotice message={connectionIssue} />
       </section>
 
       <footer className="game-notes"><p><span>东风战</span>立直・赤宝牌・食断・多人荣和・荒牌听牌料</p><p>公开链接入场・无需账号・不涉及金钱</p></footer>
@@ -396,4 +428,8 @@ export default function Home() {
 
 function Brand() {
   return <a className="brand" href="/"><span className="brand-seal">雀</span><span><strong>谐不压怔！一日麻！</strong><small>杨振山快来，就等你来玩了！</small></span></a>;
+}
+
+function ConnectionNotice({ message }: { message: string }) {
+  return message ? <p className="connection-notice" role="status">{message}<button className="quiet-button" onClick={() => window.location.reload()}>重新连接</button></p> : null;
 }

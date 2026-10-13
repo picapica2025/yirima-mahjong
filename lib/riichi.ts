@@ -365,7 +365,7 @@ function claimOptionsFor(state: RoomState, from: number, tile: Tile) {
   state.players.forEach((player) => {
     if (player.seat === from) return;
     const playerOptions: ClaimOption[] = [];
-    const ownDiscardFuriten = player.discards.some((discard) => discard.tile.type === tile.type);
+    const ownDiscardFuriten = player.discards.some((discard) => isWinning([...player.hand, discard.tile], player.melds));
     const winningTiles = [...player.hand, tile];
     if (
       !player.furitenUntilDraw &&
@@ -611,6 +611,7 @@ function resolveClaims(state: RoomState) {
     const replacement = game.rinshan.pop();
     if (!replacement) throw new GameError("嶺上牌已用完");
     player.hand = sortTiles([...player.hand, replacement]);
+    if (!player.riichi) player.furitenUntilDraw = false;
     game.lastDrawnId = replacement.id;
     revealKanDora(game);
     game.phase = "discard";
@@ -623,6 +624,14 @@ function resolveClaims(state: RoomState) {
 
 function allClaimsAnswered(game: Game) {
   return Object.keys(game.claimOptions).every((seat) => Object.prototype.hasOwnProperty.call(game.claimResponses, seat));
+}
+
+function recordClaimResponse(state: RoomState, seat: number, response: ClaimOption | null) {
+  const game = state.game as Game;
+  if (response?.kind !== "ron" && game.claimOptions[String(seat)].some((option) => option.kind === "ron")) {
+    state.players[seat].furitenUntilDraw = true;
+  }
+  game.claimResponses[String(seat)] = response;
 }
 
 function availableForSeat(state: RoomState, seat: number) {
@@ -663,7 +672,7 @@ export function applyAction(state: RoomState, token: string, action: ClientActio
   if (action.type === "tick") {
     if (game.phase === "claim" && game.claimDeadline && Date.now() >= game.claimDeadline) {
       Object.keys(game.claimOptions).forEach((seat) => {
-        if (!Object.prototype.hasOwnProperty.call(game.claimResponses, seat)) game.claimResponses[seat] = null;
+        if (!Object.prototype.hasOwnProperty.call(game.claimResponses, seat)) recordClaimResponse(state, Number(seat), null);
       });
       resolveClaims(state);
     }
@@ -697,12 +706,11 @@ export function applyAction(state: RoomState, token: string, action: ClientActio
     if (!options.length) throw new GameError("你目前沒有可鳴的牌");
     if (Object.prototype.hasOwnProperty.call(game.claimResponses, String(player.seat))) throw new GameError("你已經回應過了");
     if (action.type === "pass") {
-      if (options.some((option) => option.kind === "ron")) player.furitenUntilDraw = true;
-      game.claimResponses[String(player.seat)] = null;
+      recordClaimResponse(state, player.seat, null);
     } else if (action.type === "claim") {
       const selected = options.find((option) => option.kind === action.kind && (action.consumeIds?.length ? option.consumeIds.every((id) => action.consumeIds?.includes(id)) : true));
       if (!selected) throw new GameError("這個鳴牌選項已失效");
-      game.claimResponses[String(player.seat)] = selected;
+      recordClaimResponse(state, player.seat, selected);
     } else throw new GameError("請先處理鳴牌選項");
     if (allClaimsAnswered(game)) resolveClaims(state);
     return state;
@@ -716,7 +724,7 @@ export function applyAction(state: RoomState, token: string, action: ClientActio
     }
     const tile = game.wall.shift() as Tile;
     player.hand = sortTiles([...player.hand, tile]);
-    player.furitenUntilDraw = false;
+    if (!player.riichi) player.furitenUntilDraw = false;
     game.lastDrawnId = tile.id;
     game.phase = "discard";
     game.message = `${player.name} 摸了一張牌`;
@@ -736,6 +744,7 @@ export function applyAction(state: RoomState, token: string, action: ClientActio
     const replacement = game.rinshan.pop();
     if (!replacement) throw new GameError("嶺上牌已用完");
     player.hand = sortTiles([...player.hand, replacement]);
+    if (!player.riichi) player.furitenUntilDraw = false;
     game.lastDrawnId = replacement.id;
     revealKanDora(game);
     state.players.forEach((candidate) => {
