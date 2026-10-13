@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { version as releaseVersion } from "../package.json";
 
 type Tile = { id: number; type: number; red?: boolean };
 type Meld = { kind: "chi" | "pon" | "kan"; tiles: Tile[]; from: number; open: boolean };
@@ -235,7 +236,19 @@ export default function Home() {
     const url = `${window.location.origin}${window.location.pathname}?room=${roomCode}`;
     try {
       if (navigator.share) await navigator.share({ title: "谐不压怔！一日麻！", text: `杨振山快来，就等你来玩了！房号 ${roomCode}`, url });
-      else await navigator.clipboard.writeText(url);
+      else if (navigator.clipboard?.writeText) await navigator.clipboard.writeText(url);
+      else {
+        // Local network HTTP pages do not have the secure Clipboard API.
+        const field = document.createElement("textarea");
+        field.value = url;
+        field.style.position = "fixed";
+        field.style.opacity = "0";
+        document.body.appendChild(field);
+        field.select();
+        const success = document.execCommand("copy");
+        field.remove();
+        if (!success) throw new Error("copy failed");
+      }
       setCopied(true);
       window.setTimeout(() => setCopied(false), 1800);
     } catch {
@@ -280,6 +293,11 @@ export default function Home() {
           </div>
         </section>
         <footer className="landing-footer"><span>核心日麻规则</span><p>立直・一发・宝牌／里宝牌・振听・吃碰杠・荣和／自摸・荒牌流局</p></footer>
+        <aside className="release-info">
+          <p><strong>Fin 的作品 · v{releaseVersion}</strong><span>四位真人同桌。下载版由一台电脑开房，同一局域网的朋友可用浏览器加入。</span></p>
+          <div><a href={`/downloads/yiri-mahjong-v${releaseVersion}-portable.zip`} download>下载游戏</a><a href={`/downloads/yiri-mahjong-v${releaseVersion}-source.zip`} download>下载源码</a><a href="/downloads/PLAY.txt">启动说明</a></div>
+          <small>主机需安装 Node.js 24 LTS · 无电脑对手 · 下载版无需 ChatGPT 账号</small>
+        </aside>
       </main>
     );
   }

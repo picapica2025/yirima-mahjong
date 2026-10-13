@@ -1,6 +1,8 @@
 @import "tailwindcss";
 
 :root {
+  --font-sans: "Noto Sans TC", "PingFang SC", "Microsoft YaHei", sans-serif;
+  --font-serif: "Noto Serif TC", "Songti SC", "SimSun", serif;
   --paper: #f5efe2;
   --ink: #17211d;
   --muted: #6f746d;
@@ -261,3 +263,13 @@ button:disabled { cursor: not-allowed; opacity: .48; box-shadow: none !important
 }
 
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; transition: none !important; } }
+
+.release-info { max-width: 1180px; margin: 0 auto; padding: 24px clamp(20px, 5vw, 66px) 36px; border-top: 1px solid var(--line); font-size: 16px; }
+.release-info p { margin: 0 0 14px; display: grid; gap: 8px; }
+.release-info p span { color: var(--muted); line-height: 1.6; }
+.release-info div { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 12px; }
+.release-info a { display: inline-block; color: var(--red-dark); border: 1px solid var(--line); padding: 10px 16px; border-radius: 6px; text-decoration: none; font-weight: 600; }
+.release-info a:first-child { background: var(--red); color: white; }
+.release-info a:hover { outline: 2px solid var(--gold); }
+.release-info small { color: var(--muted); font-size: 14px; line-height: 1.6; }
+html[data-portable] .release-info { display: none; }
