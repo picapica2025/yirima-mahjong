@@ -129,13 +129,13 @@ function countsFor(tiles: Tile[]) {
 
 type ClosedGroup = { kind: "sequence" | "triplet"; type: number };
 
-function findGroups(counts: number[], groupsLeft: number): ClosedGroup[] | null {
+function findGroups(counts: number[], groupsLeft: number, forbiddenTriplet?: number): ClosedGroup[] | null {
   if (groupsLeft === 0) return counts.every((count) => count === 0) ? [] : null;
   const first = counts.findIndex((count) => count > 0);
   if (first < 0) return null;
-  if (counts[first] >= 3) {
+  if (counts[first] >= 3 && first !== forbiddenTriplet) {
     counts[first] -= 3;
-    const rest = findGroups(counts, groupsLeft - 1);
+    const rest = findGroups(counts, groupsLeft - 1, forbiddenTriplet);
     counts[first] += 3;
     if (rest) return [{ kind: "triplet", type: first }, ...rest];
   }
@@ -143,7 +143,7 @@ function findGroups(counts: number[], groupsLeft: number): ClosedGroup[] | null 
     counts[first] -= 1;
     counts[first + 1] -= 1;
     counts[first + 2] -= 1;
-    const rest = findGroups(counts, groupsLeft - 1);
+    const rest = findGroups(counts, groupsLeft - 1, forbiddenTriplet);
     counts[first] += 1;
     counts[first + 1] += 1;
     counts[first + 2] += 1;
@@ -152,14 +152,14 @@ function findGroups(counts: number[], groupsLeft: number): ClosedGroup[] | null 
   return null;
 }
 
-function standardShape(tiles: Tile[], openMelds: number) {
+function standardShape(tiles: Tile[], openMelds: number, forbiddenTriplet?: number) {
   const groupsNeeded = 4 - openMelds;
   if (tiles.length !== groupsNeeded * 3 + 2) return null;
   const counts = countsFor(tiles);
   for (let pair = 0; pair < 34; pair += 1) {
     if (counts[pair] < 2) continue;
     counts[pair] -= 2;
-    const groups = findGroups(counts, groupsNeeded);
+    const groups = findGroups(counts, groupsNeeded, forbiddenTriplet);
     counts[pair] += 2;
     if (groups) return { pair, groups };
   }
@@ -183,13 +183,44 @@ export function isWinning(tiles: Tile[], melds: Meld[]) {
   return Boolean(standardShape(tiles, melds.length)) || isChiitoitsu(tiles, melds.length) || isKokushi(tiles, melds.length);
 }
 
-function isTenpai(tiles: Tile[], melds: Meld[]) {
-  const counts = countsFor(tiles);
+function winningTileTypes(tiles: Tile[], melds: Meld[]) {
+  const counts = countsFor([...tiles, ...melds.flatMap((meld) => meld.tiles)]);
+  const waits: number[] = [];
   for (let type = 0; type < 34; type += 1) {
     if (counts[type] >= 4) continue;
-    if (isWinning([...tiles, { id: -1000 - type, type }], melds)) return true;
+    if (isWinning([...tiles, { id: -1000 - type, type }], melds)) waits.push(type);
   }
-  return false;
+  return waits;
+}
+
+function isTenpai(tiles: Tile[], melds: Meld[]) {
+  return winningTileTypes(tiles, melds).length > 0;
+}
+
+function canKan(state: RoomState) {
+  const game = state.game as Game;
+  return game.wall.length > 0 && game.rinshan.length > 0
+    && state.players.reduce((total, player) => total + player.melds.filter((meld) => meld.kind === "kan").length, 0) < 4;
+}
+
+function canAnkan(state: RoomState, player: Player, tileType: number) {
+  const game = state.game as Game;
+  if (game.phase !== "discard" || game.current !== player.seat || !canKan(state)) return false;
+  const drawn = player.hand.find((tile) => tile.id === game.lastDrawnId);
+  const tiles = player.hand.filter((tile) => tile.type === tileType);
+  if (!drawn || tiles.length !== 4) return false;
+  if (!player.riichi) return true;
+  if (drawn.type !== tileType) return false;
+  const before = player.hand.filter((tile) => tile.id !== drawn.id);
+  const after = player.hand.filter((tile) => tile.type !== tileType);
+  const melds: Meld[] = [...player.melds, { kind: "kan", tiles, from: player.seat, open: false }];
+  const originalWaits = winningTileTypes(before, player.melds);
+  const nextWaits = winningTileTypes(after, melds);
+  return originalWaits.length > 0 && originalWaits.length === nextWaits.length && originalWaits.every((type, index) => (
+    type === nextWaits[index]
+    // Every original completion must use the three held tiles as a triplet.
+    && !standardShape([...before, { id: -1000 - type, type }], player.melds.length, tileType)
+  ));
 }
 
 function isTerminalOrHonor(type: number) {
@@ -377,7 +408,7 @@ function claimOptionsFor(state: RoomState, from: number, tile: Tile) {
     }
     if (!player.riichi) {
       const matches = player.hand.filter((candidate) => candidate.type === tile.type);
-      if (matches.length >= 3) playerOptions.push({ kind: "kan", label: "大明槓", consumeIds: matches.slice(0, 3).map((match) => match.id) });
+      if (matches.length >= 3 && canKan(state)) playerOptions.push({ kind: "kan", label: "大明槓", consumeIds: matches.slice(0, 3).map((match) => match.id) });
       if (matches.length >= 2) playerOptions.push({ kind: "pon", label: "碰", consumeIds: matches.slice(0, 2).map((match) => match.id) });
       if ((from + 1) % 4 === player.seat) playerOptions.push(...chiOptions(player.hand, tile));
     }
@@ -450,6 +481,7 @@ export function createLobby(code: string, hostName: string, token: string): Room
 }
 
 export function joinLobby(state: RoomState, name: string, token: string) {
+  if (state.players.some((player) => player.token === token)) return state;
   if (state.status !== "lobby") throw new GameError("牌局已經開始，不能再加入", 409);
   if (state.players.length >= 4) throw new GameError("房間已滿", 409);
   state.players.push({
@@ -593,6 +625,7 @@ function resolveClaims(state: RoomState) {
     nextSeatAfterDiscard(state, last.from);
     return;
   }
+  if (chosen.kind === "kan" && !canKan(state)) throw new GameError("牌山或嶺上牌不足，或已達四槓，現在不能槓");
   const player = state.players[chosenSeat];
   const consumed = player.hand.filter((tile) => chosen?.consumeIds.includes(tile.id));
   player.hand = sortTiles(player.hand.filter((tile) => !chosen?.consumeIds.includes(tile.id)));
@@ -610,6 +643,7 @@ function resolveClaims(state: RoomState) {
   if (chosen.kind === "kan") {
     const replacement = game.rinshan.pop();
     if (!replacement) throw new GameError("嶺上牌已用完");
+    game.wall.pop(); // The live-wall tail seals the dead wall and cannot be drawn again.
     player.hand = sortTiles([...player.hand, replacement]);
     if (!player.riichi) player.furitenUntilDraw = false;
     game.lastDrawnId = replacement.id;
@@ -653,7 +687,7 @@ function availableForSeat(state: RoomState, seat: number) {
   }
   const counts = countsFor(player.hand);
   counts.forEach((count, tileType) => {
-    if (count === 4 && (!player.riichi || player.hand.filter((tile) => tile.type === tileType).some((tile) => tile.id === game.lastDrawnId))) actions.push({ type: "ankan", label: "暗槓", tileType });
+    if (count === 4 && canAnkan(state, player, tileType)) actions.push({ type: "ankan", label: "暗槓", tileType });
   });
   return actions;
 }
@@ -710,6 +744,7 @@ export function applyAction(state: RoomState, token: string, action: ClientActio
     } else if (action.type === "claim") {
       const selected = options.find((option) => option.kind === action.kind && (action.consumeIds?.length ? option.consumeIds.every((id) => action.consumeIds?.includes(id)) : true));
       if (!selected) throw new GameError("這個鳴牌選項已失效");
+      if (selected.kind === "kan" && !canKan(state)) throw new GameError("牌山或嶺上牌不足，或已達四槓，現在不能槓");
       recordClaimResponse(state, player.seat, selected);
     } else throw new GameError("請先處理鳴牌選項");
     if (allClaimsAnswered(game)) resolveClaims(state);
@@ -736,13 +771,13 @@ export function applyAction(state: RoomState, token: string, action: ClientActio
     return state;
   }
   if (action.type === "ankan") {
-    if (game.phase !== "discard") throw new GameError("現在不能槓");
+    if (!canAnkan(state, player, action.tileType)) throw new GameError("目前不能暗槓：需要摸牌後、保留立直聽牌與拆法，且牌山仍可補牌");
     const tiles = player.hand.filter((tile) => tile.type === action.tileType);
-    if (tiles.length !== 4) throw new GameError("手中沒有四張相同的牌");
     player.hand = player.hand.filter((tile) => tile.type !== action.tileType);
     player.melds.push({ kind: "kan", tiles, from: player.seat, open: false });
     const replacement = game.rinshan.pop();
     if (!replacement) throw new GameError("嶺上牌已用完");
+    game.wall.pop(); // The live-wall tail seals the dead wall and cannot be drawn again.
     player.hand = sortTiles([...player.hand, replacement]);
     if (!player.riichi) player.furitenUntilDraw = false;
     game.lastDrawnId = replacement.id;

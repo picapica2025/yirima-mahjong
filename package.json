@@ -1,6 +1,6 @@
 {
   "name": "yiri-mahjong",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "private": true,
   "engines": {
     "node": ">=22.13.0"
@@ -10,7 +10,7 @@
     "build": "npm run build:portable && node scripts/package-release.mjs && vinext build",
     "start": "vinext start",
     "test": "npm run build && npm run test:unit",
-    "test:unit": "node --test tests/rendered-html.test.mjs tests/riichi.test.mjs tests/room-sync.test.mjs",
+    "test:unit": "node --test tests/rendered-html.test.mjs tests/riichi.test.mjs tests/room-sync.test.mjs tests/room-client.test.mjs",
     "lint": "eslint . --ignore-pattern dist --ignore-pattern .next",
     "db:generate": "drizzle-kit generate",
     "build:portable": "node scripts/build-portable.mjs",

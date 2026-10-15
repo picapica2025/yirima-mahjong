@@ -46,6 +46,22 @@ test("portable four-player server, hidden hands, persistence and a full round", 
     assert.equal((await fetch(base + "/%2e%2e%2fserver.mjs")).status, 403);
     assert.equal((await fetch(base + "/server.mjs")).status, 404);
 
+    const retryRoom = await request("/api/rooms", { name: "重连测试" });
+    const retryPath = `/api/rooms/${retryRoom.data.room.code}`;
+    const stableToken = "abc123".repeat(5) + "ab";
+    const retries = await Promise.all([1, 2].map(() => request(retryPath, { op: "join", name: "朋友", token: stableToken })));
+    assert.ok(retries.every((r) => r.status === 201 && r.data.token === stableToken && r.data.room.viewerSeat === 1));
+    assert.equal((await request(retryPath)).data.room.players.length, 2, "retry must not consume a second seat");
+    for (const token of ["", "guessable", 123, null]) assert.equal((await request(retryPath, { op: "join", name: "非法", token })).status, 400);
+    for (const name of ["朋友二", "朋友三"]) assert.equal((await request(retryPath, { op: "join", name })).status, 201);
+    assert.equal((await request(retryPath, { op: "join", name: "重试", token: stableToken })).data.room.viewerSeat, 1, "a full room must still recover an existing seat");
+    assert.equal((await request(retryPath, { op: "action", token: retryRoom.data.token, action: { type: "start" } })).status, 200);
+    const recovered = await request(retryPath, { op: "join", name: "重试", token: stableToken });
+    assert.equal(recovered.status, 201);
+    assert.equal(recovered.data.room.viewerSeat, 1);
+    assert.equal(recovered.data.room.players.length, 4);
+    assert.equal(recovered.data.room.players.filter((p) => p.hand).length, 1);
+
     const created = await request("/api/rooms", { name: "房主" });
     assert.equal(created.status, 201);
     const code = created.data.room.code;

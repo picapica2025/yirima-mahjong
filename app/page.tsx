@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { version as releaseVersion } from "../package.json";
-import { acceptRoomSnapshot, type RoomCursor } from "../lib/room-sync";
+import { acceptRoomSnapshot, createSeatToken, requestRoom, type RoomCursor } from "../lib/room-sync";
 
 type Tile = { id: number; type: number; red?: boolean };
 type Meld = { kind: "chi" | "pon" | "kan"; tiles: Tile[]; from: number; open: boolean };
@@ -149,6 +149,7 @@ export default function Home() {
   const [connectionIssue, setConnectionIssue] = useState("");
   const cursor = useRef<RoomCursor>({ code: "", token: "", revision: -1 });
   const lastTick = useRef(0);
+  const busyRequest = useRef(false);
 
   useEffect(() => {
     const code = new URLSearchParams(window.location.search).get("room")?.trim().toUpperCase() ?? "";
@@ -161,13 +162,8 @@ export default function Home() {
 
   const fetchRoom = useCallback(async (code: string, currentToken: string, signal: AbortSignal, quiet = false) => {
     const isCurrent = () => !signal.aborted && cursor.current.code === code && cursor.current.token === currentToken;
-    const request = new AbortController();
-    const cancel = () => request.abort();
-    signal.addEventListener("abort", cancel, { once: true });
-    const timeout = window.setTimeout(cancel, 10000);
     try {
-      const response = await fetch(`/api/rooms/${encodeURIComponent(code)}?token=${encodeURIComponent(currentToken)}`, { cache: "no-store", signal: request.signal });
-      const data = await response.json() as { room?: RoomView; error?: string; revision?: number };
+      const { response, data } = await requestRoom<{ room?: RoomView; error?: string; revision?: number }>(`/api/rooms/${encodeURIComponent(code)}?token=${encodeURIComponent(currentToken)}`, { cache: "no-store", signal });
       if (!isCurrent()) return false;
       if (response.status === 404) {
         setError(data.error ?? "找不到这个房间");
@@ -180,14 +176,11 @@ export default function Home() {
       if (!quiet) setError("");
       if (data.room.game?.phase === "claim" && data.room.game.claimDeadline && Date.now() >= data.room.game.claimDeadline && currentToken && Date.now() - lastTick.current > 2000) {
         lastTick.current = Date.now();
-        await fetch(`/api/rooms/${code}`, { method: "POST", signal: request.signal, headers: { "Content-Type": "application/json" }, body: JSON.stringify({ op: "action", token: currentToken, action: { type: "tick" } }) });
+        await requestRoom(`/api/rooms/${code}`, { method: "POST", signal, headers: { "Content-Type": "application/json" }, body: JSON.stringify({ op: "action", token: currentToken, action: { type: "tick" } }) });
       }
     } catch {
       if (!isCurrent()) return false;
       setConnectionIssue("连接中断，正在重试；你的座位和已完成的操作会保留。");
-    } finally {
-      window.clearTimeout(timeout);
-      signal.removeEventListener("abort", cancel);
     }
     return true;
   }, []);
@@ -205,12 +198,13 @@ export default function Home() {
   }, [fetchRoom, ready, roomCode, token]);
 
   async function createRoom() {
+    if (busyRequest.current) return;
     if (!name.trim()) return setError("请先输入昵称");
+    busyRequest.current = true;
     setBusy(true);
     setError("");
     try {
-      const response = await fetch("/api/rooms", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name }) });
-      const data = await response.json() as { token?: string; room?: RoomView; error?: string };
+      const { response, data } = await requestRoom<{ token?: string; room?: RoomView; error?: string }>("/api/rooms", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name }) });
       if (!response.ok || !data.token || !data.room) throw new Error(data.error ?? "建立房间失败");
       localStorage.setItem(`yique-riichi:${data.room.code}`, data.token);
       window.history.replaceState({}, "", `${window.location.pathname}?room=${data.room.code}`);
@@ -221,42 +215,48 @@ export default function Home() {
     } catch (createError) {
       setError(createError instanceof Error ? createError.message : "建立房间失败");
     } finally {
+      busyRequest.current = false;
       setBusy(false);
     }
   }
 
   async function joinRoom() {
+    if (busyRequest.current) return;
     if (!name.trim()) return setError("请先输入昵称");
+    busyRequest.current = true;
     setBusy(true);
     setError("");
     try {
-      const response = await fetch(`/api/rooms/${roomCode}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ op: "join", name }) });
-      const data = await response.json() as { token?: string; room?: RoomView; error?: string; revision?: number };
-      if (!response.ok || !data.token || !data.room) throw new Error(data.error ?? "加入房间失败");
-      localStorage.setItem(`yique-riichi:${roomCode}`, data.token);
-      cursor.current = { code: roomCode, token: data.token, revision: data.revision ?? 0 };
-      setToken(data.token);
-      setRoom(data.room);
+      const seatToken = (cursor.current.code === roomCode ? cursor.current.token : "") || token || createSeatToken();
+      // Persist before POST: if its response is lost, polling/retry reclaims this seat.
+      localStorage.setItem(`yique-riichi:${roomCode}`, seatToken);
+      if (cursor.current.code !== roomCode || cursor.current.token !== seatToken) cursor.current = { code: roomCode, token: seatToken, revision: -1 };
+      setToken(seatToken);
+      const { response, data } = await requestRoom<{ token?: string; room?: RoomView; error?: string; revision?: number }>(`/api/rooms/${roomCode}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ op: "join", name, token: seatToken }) });
+      if (!response.ok || data.token !== seatToken || !data.room) throw new Error(data.error ?? "加入房间失败");
+      if (acceptRoomSnapshot(cursor.current, roomCode, seatToken, data.revision ?? 0)) setRoom(data.room);
     } catch (joinError) {
       setError(joinError instanceof Error ? joinError.message : "加入房间失败");
     } finally {
+      busyRequest.current = false;
       setBusy(false);
     }
   }
 
   async function sendAction(action: Record<string, unknown>) {
-    if (!roomCode || !token || busy) return;
+    if (!roomCode || !token || busyRequest.current) return;
+    busyRequest.current = true;
     setBusy(true);
     setError("");
     try {
-      const response = await fetch(`/api/rooms/${roomCode}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ op: "action", token, action }) });
-      const data = await response.json() as { room?: RoomView; error?: string; revision?: number };
+      const { response, data } = await requestRoom<{ room?: RoomView; error?: string; revision?: number }>(`/api/rooms/${roomCode}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ op: "action", token, action }) });
       if (!response.ok || !data.room) throw new Error(data.error ?? "操作失败");
       if (acceptRoomSnapshot(cursor.current, roomCode, token, data.revision ?? 0)) setRoom(data.room);
       setSelectedId(undefined);
     } catch (actionError) {
       setError(actionError instanceof Error ? actionError.message : "操作失败");
     } finally {
+      busyRequest.current = false;
       setBusy(false);
     }
   }

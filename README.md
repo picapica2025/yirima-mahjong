@@ -2,13 +2,13 @@
 
 杨振山快来，就等你来玩了！
 
-**Fin 的四人连线日麻作品 · v0.1.1**
+**Fin 的四人连线日麻作品 · v0.1.2**
 
 输入昵称、建立牌桌、分享房间链接。四位朋友直接开始一场东风战。
 
 ![作品封面](public/og.png)
 
-[在线体验](https://yique-mahjong-2026.ghwsocio918.chatgpt.site) · [下载游戏](https://yique-mahjong-2026.ghwsocio918.chatgpt.site/downloads/yiri-mahjong-v0.1.1-portable.zip) · [运行说明](docs/PLAY.md) · [版本说明](docs/RELEASE_NOTES.md)
+[在线体验](https://yique-mahjong-2026.ghwsocio918.chatgpt.site) · [下载游戏](https://yique-mahjong-2026.ghwsocio918.chatgpt.site/downloads/yiri-mahjong-v0.1.2-portable.zip) · [运行说明](docs/PLAY.md) · [版本说明](docs/RELEASE_NOTES.md)
 
 ## 这是怎样的作品
 
@@ -81,7 +81,7 @@ npm run release
 
 `npm run release` 构建并验证下载版，然后生成两个 ZIP、校验文件及网站下载资源。源码导出只取明确的项目文件，不包含本地房间数据、凭据、Git 历史、开发依赖或托管身份。
 
-测试覆盖振听、旧响应隔离、四人入座、并发写入、权限与暗牌隔离、整局摸打推进、重启恢复及静态文件访问边界。当前尚无实体 Windows／macOS 启动测试或浏览器端到端验证；不把通过这些测试等同于日麻规则已经完整。
+测试覆盖振听、杠后牌山与立直暗杠、请求超时与重复提交、旧响应隔离、入座重试、四人并发入座、权限与暗牌隔离、整局摸打推进、重启恢复及静态文件访问边界。另进行浏览器手动交互抽查；尚无完整浏览器自动化套件或实体 macOS 启动测试，不把通过这些检查等同于日麻规则已经完整。
 
 ## GitHub 发布
 

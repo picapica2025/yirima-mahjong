@@ -97,7 +97,8 @@ const server = createServer(async (req, res) => {
           if (body.op === "join") {
             const name = cleanName(body.name);
             if (!name) throw new GameError("请输入昵称");
-            token = randomUUID();
+            if (body.token !== undefined && (typeof body.token !== "string" || !/^(?:[a-f0-9]{32}|[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12})$/i.test(body.token))) throw new GameError("无效座位凭据");
+            token = body.token ?? randomUUID();
             record.state = joinLobby(record.state, name, token);
           } else if (body.op === "action") {
             if (typeof body.token !== "string" || !body.token || !body.action || typeof body.action !== "object") throw new GameError("缺少牌局操作资料");

@@ -50,7 +50,8 @@ export async function POST(
     if (body.op === "join") {
       const name = cleanName(body.name);
       if (!name) return Response.json({ error: "請輸入暱稱" }, { status: 400 });
-      const token = crypto.randomUUID();
+      if (body.token !== undefined && (typeof body.token !== "string" || !/^(?:[a-f0-9]{32}|[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12})$/i.test(body.token))) return Response.json({ error: "无效座位凭据" }, { status: 400 });
+      const token = body.token ?? crypto.randomUUID();
       const updated = await mutateRoom(code, (state) => joinLobby(state, name, token));
       if (!updated) return Response.json({ error: "找不到這個房間" }, { status: 404 });
       return Response.json({ token, room: publicView(updated.state, token), revision: updated.revision }, { status: 201 });
